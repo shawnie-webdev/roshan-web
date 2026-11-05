@@ -3,31 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Projects and experiments by Roshaun.">
     <title>Roshaun's Website</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/styles.css">
 </head>
-<body style="flex-direction: column">
+<body>
     <header class="top-bar">
-        <nav class="nav-container">
+        <nav class="nav-container" aria-label="Main navigation">
             <a class="nav-btn active buttonlike" href="/">Home</a>
-            <a class="nav-btn buttonlike" href="/stat" >Status</a>
+            <a class="nav-btn buttonlike" href="/stat">Status</a>
             <a class="nav-btn buttonlike" href="/control">Controls</a>
         </nav>
     </header>
 
-    <main class="main-container" style="flex-direction: column; flex-wrap: wrap;">
-        <div class="card">
+    <main class="main-container">
+        <section class="card intro-card">
             <h1>Roshaun's Website</h1>
-            <p>Hi! Welcome to my website, check out these cool stuff i make</p>
-            <h3>⬇</h3>
-        </div>
+            <p>Hi! Welcome to my website. Check out the projects and experiments I've made.</p>
+            <a class="scroll-link" href="#projects">Explore projects ↓</a>
+        </section>
+
+        <section class="projects-section" id="projects" aria-labelledby="projects-heading">
+            <div class="section-heading">
+                <div>
+                    <h2 id="projects-heading">Projects</h2>
+                    <p>Things I've built and experiments I've tried.</p>
+                </div>
+                <span id="project-count" class="project-count" aria-live="polite"></span>
+            </div>
+            <div id="items" class="project-grid" aria-live="polite">
+                <p class="state-message">Loading projects…</p>
+            </div>
+        </section>
     </main>
-    <div class="card" id="items" style="width: 80%">
 
-    </div>
+    <script>
+    (() => {
+        const container = document.getElementById('items');
+        const count = document.getElementById('project-count');
 
+        function showMessage(message, className = 'state-message') {
+            container.replaceChildren();
+            const paragraph = document.createElement('p');
+            paragraph.className = className;
+            paragraph.textContent = message;
+            container.appendChild(paragraph);
+        }
+
+        function makeProjectCard(project) {
+            const article = document.createElement('article');
+            article.className = 'card project-card';
+
+            const type = document.createElement('span');
+            type.className = 'project-type';
+            type.textContent = project['exec-type'] === 'html' ? 'HTML project' : 'Console project';
+
+            const title = document.createElement('h3');
+            title.textContent = project.name || project.id;
+
+            const description = document.createElement('p');
+            description.textContent = project.desc || 'No description provided yet.';
+
+            const link = document.createElement('a');
+            link.className = 'project-link';
+            link.href = '/project/' + encodeURIComponent(project.id);
+            link.textContent = project['exec-type'] === 'html' ? 'Open project →' : 'Open console →';
+
+            article.append(type, title, description, link);
+            return article;
+        }
+
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/projects', {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!response.ok) throw new Error('The project API returned HTTP ' + response.status);
+
+                const projects = await response.json();
+                if (!Array.isArray(projects)) throw new Error('The project API returned an invalid response');
+
+                count.textContent = projects.length + (projects.length === 1 ? ' project' : ' projects');
+                if (projects.length === 0) {
+                    showMessage('No projects have been published yet.');
+                    return;
+                }
+
+                container.replaceChildren(...projects.map(makeProjectCard));
+            } catch (error) {
+                console.error('Unable to load projects:', error);
+                showMessage('Projects could not be loaded. Please try again later.');
+            }
+        }
+
+        loadProjects();
+    })();
+    </script>
 </body>
-
-<script>
-</script>
 </html>
