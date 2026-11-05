@@ -5,103 +5,158 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const publicDir = path.join(__dirname, 'public');
+const projectsDir = path.join(publicDir, 'projects');
+const consolePage = path.join(publicDir, 'console', 'index.html');
 
-// --- Helper Functions ---
-
-function getFoldersSync(dirPath) {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-
-    return entries
-        .filter(entry => entry.isDirectory())
-        .map(entry => entry.name);
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
 }
 
-function sendErrorPage(res, status, endpoint = res.req?.originalUrl || "unknown", err = null) {
-    const info = {
-        404: "The file/object was not found, either it was moved, renamed or deleted, or did not exist in the first place",
-        401: "The action you are trying to do is unauthorized, the server does not know who you are, logging in might fix this",
-        403: "The action you are trying to do is forbidden, you may not have enough permissions to do this",
-        429: "You are sending too many requests to the server",
-        500: "An error occurred inside the server while processing your request",
-        502: "A proxy/gateway server got an invalid response from an upstream server",
-        503: "The server might be temporarily overloaded or the service you are trying to use is unavailable"
+function sendErrorPage(res, status, endpoint = res.req?.originalUrl || 'unknown') {
+    const messages = {
+        400: 'The request is invalid.',
+        404: 'The requested file or project was not found.',
+        409: 'This project cannot be loaded in the requested view.',
+        415: 'This project type is not supported by this endpoint.',
+        500: 'An internal server error occurred.'
     };
 
-    const meaning = {
-        404: "File/object not found",
-        401: "Unauthorized",
-        403: "Forbidden",
-        429: "Too many requests",
-        500: "Internal Server Error",
-        502: "Bad Gateway",
-        503: "Service temporarily unavailable"
-    };
-
-    res.status(status).type('html').send(`
-        <!DOCTYPE html>
-        <html>
-            <head><title>Error ${status}</title></head>
-            <body style="font-family: sans-serif; padding: 20px;">
-                <h1>HTTP Status Code ${status} - ${meaning[status] || 'Error'}</h1>
-                <h3>${info[status] || 'An error occurred.'}</h3>
-                <p>More about this error:</p>
-                <ul>
-                    <li>Endpoint: ${endpoint}</li>
-                </ul>
-            </body>
-        </html>
-    `);
+    const title = messages[status] || 'An error occurred.';
+    return res.status(status).type('html').send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Error ${status}</title></head>
+<body style="font-family:system-ui,sans-serif;padding:2rem;max-width:48rem;margin:auto">
+<h1>HTTP ${status}</h1><p>${escapeHtml(title)}</p><p>Endpoint: <code>${escapeHtml(endpoint)}</code></p>
+<a href="/">Return home</a></body></html>`);
 }
 
-function sendFileOrError(res, endpoint, raw) {
-    const filePath = path.join(publicDir, raw);
-    console.log(`[server.js]: Sending file '${filePath}' for endpoint '${endpoint}'`);
+function safeProjectId(value) {
+    return typeof value === 'string' && /^[a-zA-Z0-9_-]+$/.test(value);
+}
 
-    if (!fs.existsSync(filePath)) {
-        return sendErrorPage(res, 404, endpoint, new Error(`File not found: ${filePath}`));
+function getProject(projectId) {
+    if (!safeProjectId(projectId)) return null;
+
+    const projectDir = path.resolve(projectsDir, projectId);
+    if (!projectDir.startsWith(projectsDir + path.sep)) return null;
+
+    const metadataPath = path.join(projectDir, 'metadata.json');
+    if (!fs.existsSync(metadataPath)) return null;
+
+    try {
+        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+        const main = typeof metadata.main === 'string' ? metadata.main : null;
+        if (!main || path.isAbsolute(main) || main.split(/[\\/]/).includes('..')) return null;
+
+        const mainPath = path.resolve(projectDir, main);
+        if (!mainPath.startsWith(projectDir + path.sep) || !fs.existsSync(mainPath)) return null;
+
+        return {
+            id: projectId,
+            name: metadata.name || projectId,
+            desc: metadata.desc || '',
+            'exec-type': metadata['exec-type'] || 'console',
+            'run-script': metadata['run-script'] || null,
+            main,
+            projectDir,
+            mainPath
+        };
+    } catch (error) {
+        console.error(`[project]${projectId}: invalid metadata.json`, error.message);
+        return null;
     }
-
-    return res.sendFile(filePath, (err) => {
-        if (err && !res.headersSent) {
-            return sendErrorPage(res, 500, endpoint, err);
-        }
-
-        if (!err) {
-            console.log(`[server.js]: Served file for ${endpoint}`);
-        }
-    });
 }
 
-// --- VARIABLES FOR API --- //
-let projects = []
+function listProjects() {
+    if (!fs.existsSync(projectsDir)) return [];
 
-// --- API SETUP CODE --- //
-console.log("setting up API")
-for (const project of getFoldersSync("public/projects")) {
-    projects.push(project)
+    return fs.readdirSync(projectsDir, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .map(entry => getProject(entry.name))
+        .filter(Boolean)
+        .map(({ id, name, desc, 'exec-type': execType, main }) => ({
+            id, name, desc, 'exec-type': execType, main
+        }));
 }
 
-// --- Express Middleware & Routes ---
+function loadProject(req, res, next) {
+    const project = getProject(req.params.project);
+    if (!project) return sendErrorPage(res, 404, req.originalUrl);
+    req.project = project;
+    next();
+}
+
+// Static assets are served from /public.
 app.use(express.static(publicDir));
 
-app.get('/', (req, res) => { sendFileOrError(res, '/', 'homepage/index.html') });
+app.get('/', (req, res) => {
+    res.sendFile(path.join(publicDir, 'homepage', 'index.html'));
+});
 
+// List all projects, or return one project's metadata when ?project=<id> is supplied.
+app.get(['/api/projects', '/api/project/info'], (req, res) => {
+    if (!req.query.project) return res.json(listProjects());
 
-// API
-app.get('/api/project/info', (req, res) => {
-    const project = req.query.project
+    const project = getProject(String(req.query.project));
+    if (!project) return res.status(404).json({ error: 'Project not found' });
 
-    if (project) {
-        sendFileOrError(res, `/projects/${projects[project]}/metadata.json`, project);
+    const { id, name, desc, 'exec-type': execType, 'run-script': runScript, main } = project;
+    return res.json({ id, name, desc, 'exec-type': execType, 'run-script': runScript, main });
+});
+
+// The console data endpoint only returns source for console-type projects.
+// It deliberately does not execute run-script commands on the web server.
+app.get('/api/project/console', (req, res) => {
+    const projectId = String(req.query.project || '');
+    const project = getProject(projectId);
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (project['exec-type'] !== 'console') {
+        return res.status(415).json({
+            error: 'This project is not a console project',
+            'exec-type': project['exec-type'],
+            url: `/project/${encodeURIComponent(project.id)}`
+        });
     }
-    res.json(projects)
+
+    try {
+        const source = fs.readFileSync(project.mainPath, 'utf8');
+        return res.json({
+            id: project.id,
+            name: project.name,
+            desc: project.desc,
+            main: project.main,
+            source
+        });
+    } catch (error) {
+        console.error('[console] Unable to read project source:', error);
+        return res.status(500).json({ error: 'Unable to load project source' });
+    }
 });
 
-app.use((req, res) => {
-    sendErrorPage(res, 404, req.originalUrl);
+// Project viewer: HTML projects are served as HTML; console projects use the console viewer.
+app.get(['/project/:project', '/console/:project'], loadProject, (req, res) => {
+    const project = req.project;
+
+    if (project['exec-type'] === 'html') {
+        return res.sendFile(project.mainPath, (error) => {
+            if (error && !res.headersSent) sendErrorPage(res, 500, req.originalUrl);
+        });
+    }
+
+    if (project['exec-type'] === 'console') {
+        return res.sendFile(consolePage, (error) => {
+            if (error && !res.headersSent) sendErrorPage(res, 500, req.originalUrl);
+        });
+    }
+
+    return sendErrorPage(res, 415, req.originalUrl);
 });
 
-// Start the server
+app.use((req, res) => sendErrorPage(res, 404, req.originalUrl));
+
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
 });
