@@ -1,0 +1,120 @@
+:root {
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --radius: 8px;
+    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    flex-direction: column;
+
+    display: flex;
+    justify-content: center; /* Centers horizontally (on the main axis) */
+    align-items: center;     /* Centers vertically (on the cross axis) */
+
+    min-height: 100vh; /* Forces the body to be at least the full height of the screen */
+    overflow-y: auto;  /* Adds a vertical scrollbar only when needed */
+}
+
+/* Top Navigation Bar */
+.top-bar {
+    background-color: var(--card-bg);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    padding: 1rem 2rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+
+    width: 100%;
+}
+
+.nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    gap: 0.75rem;
+}
+
+
+
+/* Buttons */
+button, .nav-btn {
+    width: auto;
+    min-width: 120px;
+    height: 42px;
+    padding: 0 1.25rem;
+    background-color: transparent;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+button:hover, .nav-btn:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+    color: var(--text-main);
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+.nav-btn.active {
+    background-color: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+}
+
+.nav-btn.active:hover {
+    background-color: var(--primary-hover);
+}
+
+.buttonlike {
+    display: inline-block;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 5px;
+}
+
+/* Main Content Layout */
+.main-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.card {
+    background-color: var(--card-bg);
+    padding: 2.5rem;
+    border-radius: calc(var(--radius) * 1.5);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow);
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+}
+
+h1 {
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.025em;
+}
+
+p {
+    color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1.5;
+}
