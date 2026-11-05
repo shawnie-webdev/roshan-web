@@ -3,8 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project console</title>
+    <title>Project terminal</title>
     <link rel="stylesheet" href="/styles.css">
+    <style>
+        .terminal-card { gap: 1rem; }
+        .terminal-window { width: 100%; overflow: hidden; border: 1px solid #263449; border-radius: 12px; background: #080d16; color: #e2e8f0; }
+        .terminal-top { display: flex; align-items: center; gap: .45rem; padding: .8rem 1rem; background: #141e2e; color: #cbd5e1; font-size: .82rem; }
+        .terminal-dot { width: .65rem; height: .65rem; border-radius: 50%; background: #64748b; }
+        .terminal-top strong { margin-left: .5rem; font-weight: 600; }
+        .terminal-status { margin-left: auto; color: #a5b4fc; }
+        .terminal-output { min-height: 300px; max-height: 58vh; overflow: auto; padding: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; font: .9rem/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .terminal-line { display: block; }
+        .terminal-stderr { color: #fca5a5; }
+        .terminal-system { color: #93c5fd; }
+        .terminal-controls { display: flex; flex-wrap: wrap; gap: .65rem; }
+        .terminal-controls button, .terminal-input-row button { min-width: 100px; }
+        .terminal-run { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .terminal-stop { color: #b91c1c; border-color: #fecaca; }
+        .terminal-input-row { display: flex; gap: .65rem; align-items: stretch; }
+        .terminal-input { flex: 1; min-width: 0; min-height: 48px; resize: vertical; padding: .8rem; border: 1px solid #cbd5e1; border-radius: 9px; font: .9rem ui-monospace, monospace; }
+        .terminal-help { font-size: .85rem; }
+        @media(max-width:600px) { .terminal-input-row { flex-direction: column; } .terminal-output { min-height: 240px; } }
+    </style>
 </head>
 <body>
     <header class="top-bar">
@@ -12,41 +32,174 @@
             <a class="nav-btn buttonlike" href="/">← Projects</a>
         </nav>
     </header>
+
     <main class="console-container">
-        <section class="card console-card">
-            <span class="project-type">Console project</span>
-            <h1 id="project-name">Loading project…</h1>
+        <section class="card console-card terminal-card">
+            <span class="project-type">Interactive console project</span>
+            <h1 id="project-name">Connecting…</h1>
             <p id="project-description"></p>
-            <div class="console-window" aria-label="Project source viewer">
-                <div class="console-bar"><span></span><span></span><span></span><strong id="file-name">Loading source</strong></div>
-                <pre id="source" class="console-output">Loading project source…</pre>
+
+            <div class="terminal-window">
+                <div class="terminal-top">
+                    <span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span>
+                    <strong id="terminal-label">project terminal</strong>
+                    <span class="terminal-status" id="terminal-status">Connecting…</span>
+                </div>
+                <pre id="terminal-output" class="terminal-output" role="log" aria-live="polite">Connecting to terminal…</pre>
             </div>
-            <p class="console-note">This view loads the project's main source file. It does not execute server-side commands.</p>
+
+            <div class="terminal-controls">
+                <button id="run-button" class="terminal-run" type="button" disabled>Run project</button>
+                <button id="stop-button" class="terminal-stop" type="button" disabled>Stop</button>
+                <button id="clear-button" type="button">Clear output</button>
+            </div>
+
+            <div class="terminal-input-row">
+                <textarea id="terminal-input" class="terminal-input" rows="2" placeholder="Type input for the running program…" disabled></textarea>
+                <button id="send-button" type="button" disabled>Send input</button>
+            </div>
+            <p class="terminal-help">Enter sends input. Shift+Enter adds a new line. Ctrl+C stops the running process.</p>
+            <p class="terminal-note">The configured run-script is started from this project's directory. Runs have a 2-minute limit and a 1 MB output limit.</p>
         </section>
     </main>
+
     <script>
-    (async () => {
-        const projectId = decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
+    (() => {
+        const projectId = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
         const title = document.getElementById('project-name');
         const description = document.getElementById('project-description');
-        const source = document.getElementById('source');
-        const fileName = document.getElementById('file-name');
+        const output = document.getElementById('terminal-output');
+        const status = document.getElementById('terminal-status');
+        const runButton = document.getElementById('run-button');
+        const stopButton = document.getElementById('stop-button');
+        const clearButton = document.getElementById('clear-button');
+        const input = document.getElementById('terminal-input');
+        const sendButton = document.getElementById('send-button');
+        let socket = null;
+        let connected = false;
+        let running = false;
+        let outputLength = 0;
 
-        try {
-            const response = await fetch('/api/project/console?project=' + encodeURIComponent(projectId));
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Unable to load project');
-
-            document.title = data.name + ' · Console';
-            title.textContent = data.name;
-            description.textContent = data.desc || '';
-            fileName.textContent = data.main;
-            source.textContent = data.source;
-        } catch (error) {
-            title.textContent = 'Unable to load project';
-            source.textContent = error.message;
-            fileName.textContent = 'Error';
+        function setStatus(value) {
+            status.textContent = value;
         }
+
+        function appendLine(text, className = '') {
+            const line = document.createElement('span');
+            line.className = 'terminal-line ' + className;
+            line.textContent = text;
+            output.appendChild(line);
+            outputLength += text.length;
+            while (outputLength > 200000 && output.firstChild) {
+                outputLength -= output.firstChild.textContent.length;
+                output.removeChild(output.firstChild);
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function setRunning(value) {
+            running = value;
+            runButton.disabled = !connected || value;
+            stopButton.disabled = !connected || !value;
+            input.disabled = !connected || !value;
+            sendButton.disabled = !connected || !value;
+        }
+
+        function send(payload) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(payload));
+            }
+        }
+
+        function connect() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(protocol + '//' + location.host + '/ws/console?project=' + encodeURIComponent(projectId));
+
+            socket.addEventListener('open', () => {
+                connected = true;
+                runButton.disabled = false;
+                setStatus('Connected');
+                appendLine('Connected. Press “Run project” to start.', 'terminal-system');
+            });
+
+            socket.addEventListener('message', event => {
+                let message;
+                try { message = JSON.parse(event.data); } catch (_) { return; }
+
+                if (message.type === 'ready') {
+                    title.textContent = message.project;
+                    document.title = message.project + ' · Terminal';
+                    if (!message.hasRunScript) {
+                        runButton.disabled = true;
+                        appendLine('This project has no run-script configured.', 'terminal-stderr');
+                    }
+                } else if (message.type === 'started') {
+                    setRunning(true);
+                    setStatus('Running');
+                    appendLine('$ ' + message.command, 'terminal-system');
+                    appendLine('Working directory: ' + message.cwd, 'terminal-system');
+                } else if (message.type === 'stdout') {
+                    appendLine(message.data);
+                } else if (message.type === 'stderr') {
+                    appendLine(message.data, 'terminal-stderr');
+                } else if (message.type === 'status') {
+                    setStatus(message.status);
+                    appendLine('[ ' + message.status + ' ]', 'terminal-system');
+                } else if (message.type === 'error') {
+                    appendLine('[error] ' + message.message, 'terminal-stderr');
+                } else if (message.type === 'exit') {
+                    setRunning(false);
+                    setStatus('Exited');
+                    appendLine('[process exited: code=' + message.code + (message.signal ? ', signal=' + message.signal : '') + ']', 'terminal-system');
+                }
+            });
+
+            socket.addEventListener('close', () => {
+                connected = false;
+                setRunning(false);
+                runButton.disabled = true;
+                setStatus('Disconnected');
+                appendLine('Terminal connection closed. Reload the page to reconnect.', 'terminal-stderr');
+            });
+
+            socket.addEventListener('error', () => {
+                setStatus('Connection error');
+            });
+        }
+
+        runButton.addEventListener('click', () => {
+            output.replaceChildren();
+            outputLength = 0;
+            send({ type: 'start' });
+        });
+
+        stopButton.addEventListener('click', () => send({ type: 'stop' }));
+
+        clearButton.addEventListener('click', () => {
+            output.replaceChildren();
+            outputLength = 0;
+        });
+
+        function sendInput() {
+            if (!input.value) return;
+            send({ type: 'stdin', data: input.value + '\n' });
+            input.value = '';
+            input.focus();
+        }
+
+        sendButton.addEventListener('click', sendInput);
+        input.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendInput();
+            }
+            if (event.key.toLowerCase() === 'c' && event.ctrlKey) {
+                event.preventDefault();
+                send({ type: 'stop' });
+            }
+        });
+
+        connect();
     })();
     </script>
 </body>
