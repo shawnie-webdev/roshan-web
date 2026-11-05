@@ -1,0 +1,7 @@
+{
+  "name": "Fibbonachi",
+  "desc": "A simple script",
+  "exec-type": "console",
+  "run-script": "python3 script.py",
+  "main": "script.py"
+}
