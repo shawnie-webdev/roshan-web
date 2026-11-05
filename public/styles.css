@@ -5,116 +5,109 @@
     --card-bg: #ffffff;
     --text-main: #0f172a;
     --text-muted: #64748b;
-    --radius: 8px;
-    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+    --radius: 10px;
+    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06);
 }
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
 
 body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: var(--bg-color);
-    color: var(--text-main);
-    flex-direction: column;
-
+    min-height: 100vh;
     display: flex;
-    justify-content: center; /* Centers horizontally (on the main axis) */
-    align-items: center;     /* Centers vertically (on the cross axis) */
-
-    min-height: 100vh; /* Forces the body to be at least the full height of the screen */
-    overflow-y: auto;  /* Adds a vertical scrollbar only when needed */
+    flex-direction: column;
+    align-items: center;
+    background: var(--bg-color);
+    color: var(--text-main);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Top Navigation Bar */
 .top-bar {
-    background-color: var(--card-bg);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    padding: 1rem 2rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-
     width: 100%;
+    padding: 1rem 2rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .nav-container {
     max-width: 1200px;
     margin: 0 auto;
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
 }
 
-
-
-/* Buttons */
 button, .nav-btn {
-    width: auto;
     min-width: 120px;
-    height: 42px;
-    padding: 0 1.25rem;
-    background-color: transparent;
+    min-height: 42px;
+    padding: 0.65rem 1.25rem;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: var(--radius);
+    background: transparent;
     color: var(--text-muted);
     font-size: 0.95rem;
     font-weight: 600;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    border-radius: var(--radius);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 button:hover, .nav-btn:hover {
-    background-color: rgba(0, 0, 0, 0.03);
+    background: rgba(0, 0, 0, 0.04);
     color: var(--text-main);
-    border-color: rgba(0, 0, 0, 0.2);
 }
 
-.nav-btn.active {
-    background-color: var(--primary);
-    color: #ffffff;
-    border-color: var(--primary);
-}
+.nav-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+.nav-btn.active:hover { background: var(--primary-hover); }
+.buttonlike { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 
-.nav-btn.active:hover {
-    background-color: var(--primary-hover);
-}
-
-.buttonlike {
-    display: inline-block;
-    padding: 10px 20px;
-    text-decoration: none;
-    border-radius: 5px;
-}
-
-/* Main Content Layout */
 .main-container {
+    width: min(1120px, 100%);
     flex: 1;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
+    flex-direction: column;
+    gap: 2.5rem;
+    padding: 3rem 1.5rem 4rem;
 }
 
 .card {
-    background-color: var(--card-bg);
-    padding: 2.5rem;
-    border-radius: calc(var(--radius) * 1.5);
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow: var(--shadow);
-    max-width: 600px;
     width: 100%;
-    text-align: center;
+    padding: 2rem;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: calc(var(--radius) * 1.5);
+    background: var(--card-bg);
+    box-shadow: var(--shadow);
 }
 
-h1 {
-    font-size: 1.75rem;
-    margin-bottom: 0.75rem;
-    letter-spacing: -0.025em;
-}
+.intro-card { text-align: center; padding: 3rem 2rem; }
+h1 { margin-bottom: 0.75rem; font-size: clamp(1.7rem, 4vw, 2.25rem); letter-spacing: -0.03em; }
+p { color: var(--text-muted); font-size: 1rem; line-height: 1.6; }
+.scroll-link { display: inline-block; margin-top: 1.25rem; color: var(--primary); font-weight: 650; text-decoration: none; }
+.scroll-link:hover, .project-link:hover { text-decoration: underline; }
 
-p {
-    color: var(--text-muted);
-    font-size: 1rem;
-    line-height: 1.5;
+.projects-section { width: 100%; }
+.section-heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin-bottom: 1rem; }
+.section-heading h2 { margin-bottom: 0.35rem; font-size: 1.5rem; }
+.project-count, .project-type { color: var(--primary); font-size: 0.8rem; font-weight: 700; }
+.project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
+.project-card { display: flex; flex-direction: column; align-items: flex-start; gap: 0.8rem; padding: 1.5rem; text-align: left; }
+.project-card h3 { font-size: 1.2rem; }
+.project-link { margin-top: auto; color: var(--primary); font-weight: 700; text-decoration: none; }
+.state-message { grid-column: 1 / -1; padding: 1.5rem; text-align: center; }
+
+.console-container { width: min(1000px, 100%); padding: 2.5rem 1.5rem; }
+.console-card { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; }
+.console-window { width: 100%; overflow: hidden; border-radius: 10px; background: #0b1220; color: #e2e8f0; }
+.console-bar { display: flex; align-items: center; gap: 0.45rem; padding: 0.8rem 1rem; background: #172033; color: #cbd5e1; font-size: 0.8rem; }
+.console-bar span { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #64748b; }
+.console-bar strong { margin-left: 0.5rem; font-weight: 500; }
+.console-output { min-height: 220px; max-height: 65vh; overflow: auto; padding: 1.25rem; white-space: pre-wrap; overflow-wrap: anywhere; font: 0.9rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.console-note { font-size: 0.85rem; }
+
+@media (max-width: 600px) {
+    .top-bar { padding: 0.8rem 1rem; }
+    .main-container { padding: 2rem 1rem 3rem; }
+    .section-heading { align-items: flex-start; flex-direction: column; }
+    .card { padding: 1.5rem; }
 }
