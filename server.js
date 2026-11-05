@@ -17,6 +17,8 @@ const MAX_RUNTIME_MS = 2 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 const START_COOLDOWN_MS = 3000;
 const MAX_STDIN_BYTES = 8 * 1024;
+const MAX_STDIN_TOTAL_BYTES = 64 * 1024;
+const MAX_CONCURRENT_RUNS = 2;
 const activeRuns = new Map();
 const lastRunAt = new Map();
 
@@ -141,6 +143,11 @@ function startProjectRun(project, ws) {
         return;
     }
 
+    if (activeRuns.size >= MAX_CONCURRENT_RUNS) {
+        sendSocket(ws, { type: 'error', message: 'The server is already running the maximum number of projects. Try again shortly.' });
+        return;
+    }
+
     const now = Date.now();
     const last = lastRunAt.get(project.id) || 0;
     if (now - last < START_COOLDOWN_MS) {
@@ -175,6 +182,7 @@ function startProjectRun(project, ws) {
         ws,
         child,
         outputBytes: 0,
+        stdinBytes: 0,
         exited: false,
         stopping: false,
         runtimeTimer: null,
@@ -183,7 +191,7 @@ function startProjectRun(project, ws) {
     activeRuns.set(project.id, run);
 
     const emitOutput = (type, chunk) => {
-        if (run.exited) return;
+        if (run.exited || run.stopping) return;
         const data = chunk.toString('utf8');
         run.outputBytes += Buffer.byteLength(data, 'utf8');
         if (run.outputBytes > MAX_OUTPUT_BYTES) {
@@ -267,6 +275,12 @@ wss.on('connection', (ws, request) => {
                 sendSocket(ws, { type: 'error', message: 'Input is too large or invalid.' });
                 return;
             }
+            const inputBytes = Buffer.byteLength(message.data, 'utf8');
+            if (run.stdinBytes + inputBytes > MAX_STDIN_TOTAL_BYTES) {
+                sendSocket(ws, { type: 'error', message: 'Input limit reached (64 KB for this run).' });
+                return;
+            }
+            run.stdinBytes += inputBytes;
             if (!run.child.stdin.destroyed && run.child.stdin.writable) {
                 run.child.stdin.write(message.data);
             }
