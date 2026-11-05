@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project console</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <header class="top-bar">
+        <nav class="nav-container" aria-label="Main navigation">
+            <a class="nav-btn buttonlike" href="/">← Projects</a>
+        </nav>
+    </header>
+    <main class="console-container">
+        <section class="card console-card">
+            <span class="project-type">Console project</span>
+            <h1 id="project-name">Loading project…</h1>
+            <p id="project-description"></p>
+            <div class="console-window" aria-label="Project source viewer">
+                <div class="console-bar"><span></span><span></span><span></span><strong id="file-name">Loading source</strong></div>
+                <pre id="source" class="console-output">Loading project source…</pre>
+            </div>
+            <p class="console-note">This view loads the project's main source file. It does not execute server-side commands.</p>
+        </section>
+    </main>
+    <script>
+    (async () => {
+        const projectId = decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
+        const title = document.getElementById('project-name');
+        const description = document.getElementById('project-description');
+        const source = document.getElementById('source');
+        const fileName = document.getElementById('file-name');
+
+        try {
+            const response = await fetch('/api/project/console?project=' + encodeURIComponent(projectId));
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Unable to load project');
+
+            document.title = data.name + ' · Console';
+            title.textContent = data.name;
+            description.textContent = data.desc || '';
+            fileName.textContent = data.main;
+            source.textContent = data.source;
+        } catch (error) {
+            title.textContent = 'Unable to load project';
+            source.textContent = error.message;
+            fileName.textContent = 'Error';
+        }
+    })();
+    </script>
+</body>
+</html>
