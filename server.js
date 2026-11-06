@@ -320,10 +320,6 @@ app.get(['/api/projects', '/api/project/info'], (req, res) => {
 app.get('/api/project/console', (req, res) => {
     const project = getProject(String(req.query.project || ''));
     if (!project) return res.status(404).json({ error: 'Project not found' });
-    if (project['exec-type'] !== 'console') {
-        return res.status(415).json({ error: 'This project is not a console project' });
-    }
-
     try {
         return res.json({
             id: project.id,
@@ -338,26 +334,49 @@ app.get('/api/project/console', (req, res) => {
     }
 });
 
-app.get('/project/:project', (req, res) => {
-    return res.sendFile("console/view.html")
-})
-
-app.get('/console/:project', loadProject, (req, res) => {
+function sendProjectPage(req, res) {
     const project = req.project;
 
     if (project['exec-type'] === 'html') {
         return res.sendFile(project.mainPath, error => {
-            if (error && !res.headersSent) sendErrorPage(res, 500, req.originalUrl);
+            if (error) {
+                console.error('[project] Unable to send HTML project:', error.message);
+                if (!res.headersSent) sendErrorPage(res, error.statusCode === 404 ? 404 : 500, req.originalUrl);
+            }
         });
     }
 
     if (project['exec-type'] === 'console') {
         return res.sendFile(consolePage, error => {
-            if (error && !res.headersSent) sendErrorPage(res, 500, req.originalUrl);
+            if (error) {
+                console.error('[project] Unable to send console page:', error.message);
+                if (!res.headersSent) sendErrorPage(res, 500, req.originalUrl);
+            }
         });
     }
 
     return sendErrorPage(res, 415, req.originalUrl);
+}
+
+// The homepage's project links land here. Choose the correct page from metadata.
+app.get('/project/:project', loadProject, sendProjectPage);
+
+// Keep the explicit console URL as an alias for console projects.
+app.get('/console/:project', loadProject, (req, res) => {
+    if (req.project['exec-type'] !== 'console') {
+        return sendErrorPage(res, 415, req.originalUrl);
+    }
+    return sendProjectPage(req, res);
+});
+
+// Source viewer is separate from the runnable terminal and HTML project page.
+app.get('/view/:project', loadProject, (req, res) => {
+    return res.sendFile(path.join(publicDir, 'console', 'view.html'), error => {
+        if (error) {
+            console.error('[view] Unable to send source viewer:', error.message);
+            if (!res.headersSent) sendErrorPage(res, 500, req.originalUrl);
+        }
+    });
 });
 
 app.use((req, res) => sendErrorPage(res, 404, req.originalUrl));
