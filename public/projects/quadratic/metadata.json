@@ -1,0 +1,7 @@
+{
+  "name": "Quadratic Formula",
+  "desc": "A simple python script that runs the quadratic formula",
+  "exec-type": "console",
+  "run-script": "python3 script.py",
+  "main": "script.py"
+}

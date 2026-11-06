@@ -338,7 +338,11 @@ app.get('/api/project/console', (req, res) => {
     }
 });
 
-app.get(['/project/:project', '/console/:project'], loadProject, (req, res) => {
+app.get('/project/:project', (req, res) => {
+    return res.sendFile("console/view.html")
+})
+
+app.get('/console/:project', loadProject, (req, res) => {
     const project = req.project;
 
     if (project['exec-type'] === 'html') {
