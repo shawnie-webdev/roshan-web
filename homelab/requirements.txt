@@ -1,0 +1,1 @@
+pyserial>=3.5\npsutil>=5.9\nwebsocket-client>=1.7\n
