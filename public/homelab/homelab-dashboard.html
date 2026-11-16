@@ -1,21 +1,81 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-
-    <style>
-        .grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr;
-        }
-
-        .card {
-            border: 1px solid #000;
-        }
-    </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Private homelab service status dashboard"><title>Homelab · Roshaun's Website</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+:root{--lab-green:#16a34a;--lab-red:#dc2626;--lab-amber:#d97706}
+.homelab-main{width:min(1120px,100%);padding:2.5rem 1.5rem 4rem;display:flex;flex-direction:column;gap:1.5rem}
+.lab-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem}.lab-heading h1{margin:0 0 .35rem}.lab-subtitle{font-size:.94rem}
+.connection-note{display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-size:.85rem}.connection-dot{width:.6rem;height:.6rem;border-radius:50%;background:#94a3b8;display:inline-block}.connection-dot.live{background:var(--lab-green);box-shadow:0 0 0 4px #16a34a1a}
+.device-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.1rem}.device-card{padding:1.5rem;border:1px solid var(--device-border);border-top:4px solid var(--device-accent);border-radius:16px;background:var(--card-bg);box-shadow:var(--shadow);min-width:0}
+.device-card.online{--device-accent:var(--lab-green);--device-border:#16a34a55}.device-card.offline{--device-accent:var(--lab-red);--device-border:#dc262655}
+.device-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1.25rem}.device-identity{display:flex;align-items:center;gap:.9rem;min-width:0}
+.device-icon{width:3rem;height:3rem;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--device-accent) 12%,transparent);color:var(--device-accent);font-size:1.55rem;flex:none}
+.device-head h2{font-size:1.2rem;margin-bottom:.2rem}.device-head p{font-size:.82rem}
+.status-label{display:inline-flex;align-items:center;gap:.45rem;padding:.4rem .7rem;border-radius:999px;font-size:.76rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;background:color-mix(in srgb,var(--device-accent) 11%,transparent);color:var(--device-accent);white-space:nowrap}
+.status-label:before{content:'';width:.48rem;height:.48rem;border-radius:50%;background:currentColor}
+.subgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}.mini-card{min-width:0;padding:.9rem 1rem;border:1px solid var(--mini-border);border-radius:12px;background:var(--mini-bg)}
+.mini-card.good{--mini-accent:var(--lab-green);--mini-border:#16a34a55;--mini-bg:#16a34a0a}.mini-card.bad{--mini-accent:var(--lab-red);--mini-border:#dc262655;--mini-bg:#dc26260a}.mini-card.unknown{--mini-accent:var(--lab-amber);--mini-border:#d9770655;--mini-bg:#d977060a}
+.mini-top{display:flex;align-items:center;justify-content:space-between;gap:.5rem}.mini-card h3{font-size:.87rem;font-weight:700}.mini-state{color:var(--mini-accent);font-size:.72rem;font-weight:800;text-transform:uppercase;white-space:nowrap}.mini-card p{margin-top:.35rem;font-size:.76rem}
+.info-card{border-color:rgba(100,116,139,.25);background:rgba(100,116,139,.04)}.info-card .mini-state{color:var(--text-main)}.battery-value{font-size:1.5rem;font-weight:800;letter-spacing:-.04em;margin-top:.3rem;color:var(--text-main)}
+.battery-track{height:6px;border-radius:99px;background:rgba(100,116,139,.18);overflow:hidden;margin-top:.55rem}.battery-fill{height:100%;width:0;background:var(--lab-green);border-radius:inherit;transition:width .25s ease}
+.lab-footer{display:flex;justify-content:space-between;align-items:center;gap:1rem;color:var(--text-muted);font-size:.8rem}.login-wrap{width:min(440px,100%);margin:3rem auto}.login-card{display:flex;flex-direction:column;gap:1rem}
+.login-card label{font-size:.9rem;font-weight:700}.login-card input{width:100%;padding:.85rem 1rem;border:1px solid rgba(100,116,139,.35);border-radius:10px;background:var(--card-bg);color:var(--text-main);font:inherit}
+.login-card button{width:100%;background:var(--primary);color:#fff;border-color:var(--primary)}.login-error{min-height:1.2rem;color:var(--lab-red);font-size:.85rem}.hidden{display:none!important}
+@media(max-width:720px){.device-grid{grid-template-columns:1fr}.lab-heading{align-items:flex-start;flex-direction:column}.homelab-main{padding:2rem 1rem 3rem}}
+@media(max-width:420px){.subgrid{grid-template-columns:1fr}.device-head{align-items:flex-start;flex-direction:column}}
+</style>
 </head>
 <body>
-
-</body>
-</html>
+<header class="top-bar"><nav class="nav-container" aria-label="Main navigation">
+<strong style="align-self:center">Roshaun's Website</strong><a class="nav-btn buttonlike" href="/">Home</a><a class="nav-btn buttonlike" href="/list/scripts">Scripts</a><a class="nav-btn buttonlike" href="/list/projects">Projects</a><a class="nav-btn active buttonlike" href="/homelab">Homelab</a>
+</nav></header>
+<main class="homelab-main">
+<section id="login-view" class="login-wrap"><div class="card login-card">
+<span class="script-type">Private area</span><h1>Homelab access</h1><p>Enter the homelab password to view live device and service telemetry.</p>
+<form id="login-form"><label for="password">Access password</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit">Unlock homelab</button></form><p id="login-error" class="login-error" role="alert"></p>
+</div></section>
+<section id="dashboard-view" class="hidden">
+<div class="lab-heading"><div><h1>Homelab</h1><p class="lab-subtitle">Live overview of your Raspberry Pi and Server 2.</p></div><div class="connection-note"><span id="api-dot" class="connection-dot"></span><span id="api-state">Connecting to status service…</span></div></div>
+<section aria-labelledby="visualizer-heading"><div class="section-heading"><div><h2 id="visualizer-heading">Service Status Visualizer</h2><p>Device health and connectivity at a glance.</p></div></div>
+<div class="device-grid">
+<article id="pi-card" class="device-card offline"><div class="device-head"><div class="device-identity"><div class="device-icon" aria-hidden="true">🍓</div><div><h2>Raspberry Pi 4</h2><p>Server 1 · USB everything host</p></div></div><span id="pi-main-status" class="status-label">Offline</span></div>
+<div class="subgrid">
+<div id="pi-ssh" class="mini-card bad"><div class="mini-top"><h3>SSH access</h3><span class="mini-state">Offline</span></div><p>Remote shell availability</p></div>
+<div id="pi-usb" class="mini-card bad"><div class="mini-top"><h3>USB Gadget setup</h3><span class="mini-state">Inactive</span></div><p>PiAsA composite gadget</p></div>
+<div id="pi-server2" class="mini-card bad"><div class="mini-top"><h3>Server 2 connection</h3><span class="mini-state">Disconnected</span></div><p>Pi-to-laptop network reachability</p></div>
+<div id="pi-kvm" class="mini-card bad"><div class="mini-top"><h3>Pi KVM</h3><span class="mini-state">Disabled</span></div><p>KVM mode indicator</p></div>
+<div id="pi-wousb" class="mini-card bad"><div class="mini-top"><h3>Pi WoUSB</h3><span class="mini-state">Disabled</span></div><p>WoUSB state indicator</p></div>
+</div></article>
+<article id="pc-card" class="device-card offline"><div class="device-head"><div class="device-identity"><div class="device-icon" aria-hidden="true">💻</div><div><h2>Server 2</h2><p>Laptop · 192.168.1.60</p></div></div><span id="pc-main-status" class="status-label">Offline</span></div>
+<div class="subgrid">
+<div id="pc-anydesk" class="mini-card bad"><div class="mini-top"><h3>AnyDesk connected</h3><span class="mini-state">No</span></div><p>AnyDesk status reported by PC</p></div>
+<div id="pc-wifi" class="mini-card bad"><div class="mini-top"><h3>Wi-Fi access</h3><span class="mini-state">Disconnected</span></div><p>Wireless network connection</p></div>
+<div class="mini-card info-card"><div class="mini-top"><h3>Battery</h3><span class="mini-state" id="battery-state">No data</span></div><div class="battery-value" id="battery-value">—</div><div class="battery-track"><div id="battery-fill" class="battery-fill"></div></div><p>Server 2 battery level</p></div>
+<div class="mini-card info-card"><div class="mini-top"><h3>Last PC update</h3><span class="mini-state" id="pc-updated">Never</span></div><p>Telemetry received over USB serial</p></div>
+</div></article>
+</div></section>
+<div class="lab-footer"><span id="last-updated">Waiting for device telemetry…</span><button id="logout-button" type="button">Lock dashboard</button></div>
+</section></main>
+<script>
+(() => {
+const loginView=document.getElementById('login-view'),dashboardView=document.getElementById('dashboard-view'),loginForm=document.getElementById('login-form'),loginError=document.getElementById('login-error'),apiDot=document.getElementById('api-dot'),apiState=document.getElementById('api-state');let pollTimer=null;
+function showLogin(message=''){dashboardView.classList.add('hidden');loginView.classList.remove('hidden');loginError.textContent=message;if(pollTimer)clearInterval(pollTimer)}
+function showDashboard(){loginView.classList.add('hidden');dashboardView.classList.remove('hidden');refresh();if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(refresh,3000)}
+loginForm.addEventListener('submit',async event=>{event.preventDefault();loginError.textContent='';const button=loginForm.querySelector('button');button.disabled=true;button.textContent='Checking…';try{const response=await fetch('/api/homelab/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Unable to sign in.');document.getElementById('password').value='';showDashboard()}catch(error){loginError.textContent=error.message}finally{button.disabled=false;button.textContent='Unlock homelab'}});
+function setMini(id,value,yesText,noText,detail,known=true){const card=document.getElementById(id),state=card.querySelector('.mini-state');card.classList.toggle('good',known&&value===true);card.classList.toggle('bad',known&&value===false);card.classList.toggle('unknown',!known);state.textContent=!known?'Unknown':(value?yesText:noText);if(detail)card.querySelector('p').textContent=detail}
+function setDevice(id,online){document.getElementById(id+'-card').classList.toggle('online',online);document.getElementById(id+'-card').classList.toggle('offline',!online);document.getElementById(id+'-main-status').textContent=online?'Online':'Offline'}
+function formatTime(value){if(!value)return'Never';const date=new Date(value);return Number.isNaN(date.getTime())?'Unknown':date.toLocaleTimeString()}
+async function refresh(){try{const response=await fetch('/api/homelab/status',{cache:'no-store'});if(response.status===401){showLogin('Your session expired. Please sign in again.');return}if(!response.ok)throw new Error('Status service returned HTTP '+response.status);const data=await response.json(),pi=data.pi||{},pc=data.pc||{};
+setDevice('pi',data.server1_on===true);setDevice('pc',data.server2_on===true);
+setMini('pi-ssh',pi.ssh_access,'Available','Unavailable');setMini('pi-usb',pi.usb_gadget_setup,'Active','Inactive');setMini('pi-server2',pi.server2_connection,'Connected','Disconnected');setMini('pi-kvm',pi.pi_kvm,'Enabled','Disabled');setMini('pi-wousb',pi.pi_wousb,'Enabled','Disabled');
+setMini('pc-anydesk',pc.anydesk_connected,'Connected','Not connected','AnyDesk status reported by PC',pc.online);setMini('pc-wifi',pc.wifi_access,'Connected','Disconnected','Wireless network connection',pc.online);
+const battery=typeof pc.battery_percent==='number'?pc.battery_percent:null;document.getElementById('battery-value').textContent=battery===null?'—':Math.round(battery)+'%';document.getElementById('battery-state').textContent=battery===null?'No data':'Reported';document.getElementById('battery-fill').style.width=battery===null?'0%':Math.max(0,Math.min(100,battery))+'%';document.getElementById('pc-updated').textContent=formatTime(pc.last_seen);document.getElementById('last-updated').textContent=data.updated_at?'Last telemetry: '+formatTime(data.updated_at):'Waiting for device telemetry…';apiDot.classList.add('live');apiState.textContent='Status service connected';
+}catch(error){apiDot.classList.remove('live');apiState.textContent='Status service unavailable';console.error('Homelab refresh failed:',error)}}
+document.getElementById('logout-button').addEventListener('click',async()=>{try{await fetch('/api/homelab/logout',{method:'POST'})}catch(_){}showLogin('Dashboard locked.')});
+fetch('/api/homelab/status',{cache:'no-store'}).then(response=>response.ok?showDashboard():showLogin()).catch(()=>showLogin('Unable to contact the homelab service.'));
+})();
+</script>
+</body></html>
