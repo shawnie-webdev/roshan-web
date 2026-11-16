@@ -32,19 +32,24 @@ def wifi_connected():
             text = result.stdout.lower()
             return result.returncode == 0 and "state" in text and "connected" in text
         if system == "Linux":
-            result = subprocess.run(
-                ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device"],
-                capture_output=True, text=True, timeout=3,
-            )
-            for line in result.stdout.splitlines():
-                fields = line.split(":")
-                if len(fields) >= 3 and fields[1] == "wifi" and fields[2] == "connected":
-                    return True
+            try:
+                result = subprocess.run(
+                    ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.splitlines():
+                        fields = line.split(":")
+                        if len(fields) >= 3 and fields[1] == "wifi" and fields[2] == "connected":
+                            return True
+                    return False
+            except (OSError, subprocess.SubprocessError):
+                pass
             # Fallback for systems without NetworkManager.
-            for name, stats in psutil.net_if_stats().items():
-                if name.lower().startswith(("wlan", "wl")) and stats.isup:
-                    return True
-            return False
+            return any(
+                name.lower().startswith(("wlan", "wl")) and stats.isup
+                for name, stats in psutil.net_if_stats().items()
+            )
         # On macOS, an active Wi-Fi interface is usually en0/en1.
         for name, stats in psutil.net_if_stats().items():
             if name.lower() in ("en0", "en1") and stats.isup:
