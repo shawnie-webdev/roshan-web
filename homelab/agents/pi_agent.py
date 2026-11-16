@@ -39,7 +39,8 @@ def now_iso():
 
 def read_flag(path):
     try:
-        return open(path, "r", encoding="utf-8").read().strip().lower() in ("1", "true", "yes", "on")
+        with open(path, "r", encoding="utf-8") as handle:
+            return handle.read().strip().lower() in ("1", "true", "yes", "on")
     except OSError:
         return False
 
