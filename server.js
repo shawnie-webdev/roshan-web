@@ -9,6 +9,197 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 const publicDir = path.join(__dirname, 'public');
+
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '16kb' }));
+
+// --------------------------------------------------
+// Homelab authentication and live telemetry
+// --------------------------------------------------
+const crypto = require('crypto');
+const HOMELAB_ACCESS_PASSWORD = process.env.HOMELAB_ACCESS_PASSWORD || '';
+const HOMELAB_AGENT_TOKEN = process.env.HOMELAB_AGENT_TOKEN || '';
+const HOMELAB_COOKIE = 'homelab_session';
+const HOMELAB_SESSION_MS = 8 * 60 * 60 * 1000;
+
+const homelabState = {
+    pi: {
+        online: false, ssh_access: false, usb_gadget_setup: false,
+        server2_connection: false, pi_kvm: false, pi_wousb: false,
+        last_seen: null
+    },
+    pc: {
+        online: false, anydesk_connected: false, wifi_access: false,
+        battery_percent: null, last_seen: null
+    },
+    updated_at: null
+};
+
+let homelabAgentSocket = null;
+const homelabLoginAttempts = new Map();
+
+function safeEqualText(a, b) {
+    const left = Buffer.from(String(a));
+    const right = Buffer.from(String(b));
+    return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function homelabSignature(expiry) {
+    return crypto.createHmac('sha256', HOMELAB_ACCESS_PASSWORD)
+        .update(String(expiry)).digest('hex');
+}
+
+function hasHomelabSession(req) {
+    if (!HOMELAB_ACCESS_PASSWORD) return false;
+    const value = req.cookies?.[HOMELAB_COOKIE];
+    if (!value || typeof value !== 'string') return false;
+    const [expiry, signature] = value.split('.');
+    if (!/^\d+$/.test(expiry || '') || !signature) return false;
+    if (Number(expiry) < Date.now()) return false;
+    return safeEqualText(signature, homelabSignature(expiry));
+}
+
+function requireHomelab(req, res, next) {
+    if (!hasHomelabSession(req)) {
+        return res.status(401).json({ error: 'Homelab authentication required.' });
+    }
+    next();
+}
+
+// Small cookie parser; no additional session dependency is needed.
+app.use((req, _res, next) => {
+    req.cookies = {};
+    const header = req.headers.cookie || '';
+    for (const part of header.split(';')) {
+        const index = part.indexOf('=');
+        if (index < 0) continue;
+        const key = part.slice(0, index).trim();
+        const value = part.slice(index + 1).trim();
+        try { req.cookies[key] = decodeURIComponent(value); } catch (_) {}
+    }
+    next();
+});
+
+app.post('/api/homelab/login', (req, res) => {
+    if (!HOMELAB_ACCESS_PASSWORD) {
+        return res.status(503).json({ error: 'HOMELAB_ACCESS_PASSWORD is not configured.' });
+    }
+
+    const address = req.ip || req.socket.remoteAddress || 'unknown';
+    const attempt = homelabLoginAttempts.get(address) || { count: 0, until: 0 };
+    if (attempt.until > Date.now() && attempt.count >= 8) {
+        return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+    }
+
+    const supplied = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!safeEqualText(supplied, HOMELAB_ACCESS_PASSWORD)) {
+        attempt.count += 1;
+        if (attempt.count >= 8) attempt.until = Date.now() + 10 * 60 * 1000;
+        homelabLoginAttempts.set(address, attempt);
+        return res.status(401).json({ error: 'Incorrect password.' });
+    }
+
+    homelabLoginAttempts.delete(address);
+    const expiry = String(Date.now() + HOMELAB_SESSION_MS);
+    const value = expiry + '.' + homelabSignature(expiry);
+    res.cookie(HOMELAB_COOKIE, value, {
+        httpOnly: true,
+        secure: req.secure,
+        sameSite: 'strict',
+        path: '/',
+        maxAge: HOMELAB_SESSION_MS
+    });
+    return res.json({ ok: true });
+});
+
+app.post('/api/homelab/logout', requireHomelab, (_req, res) => {
+    res.clearCookie(HOMELAB_COOKIE, { httpOnly: true, secure: _req.secure, sameSite: 'strict', path: '/' });
+    res.json({ ok: true });
+});
+
+app.get('/api/homelab/status', requireHomelab, (_req, res) => {
+    const now = Date.now();
+    const piFresh = homelabState.pi.last_seen && now - Date.parse(homelabState.pi.last_seen) < 20000;
+    const pcFresh = homelabState.pc.last_seen && now - Date.parse(homelabState.pc.last_seen) < 20000;
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        ...homelabState,
+        pi: { ...homelabState.pi, online: Boolean(piFresh && homelabState.pi.online) },
+        pc: { ...homelabState.pc, online: Boolean(pcFresh && homelabState.pc.online) },
+        server1_on: Boolean(piFresh && homelabState.pi.online),
+        server2_on: Boolean(pcFresh && homelabState.pc.online),
+        pi_kvm: homelabState.pi.pi_kvm,
+        pi_wousb: homelabState.pi.pi_wousb
+    });
+});
+
+const homelabWss = new WebSocketServer({ server, path: '/ws/homelab', maxPayload: 16384 });
+homelabWss.on('connection', (ws) => {
+    let authenticated = false;
+    const authTimer = setTimeout(() => {
+        if (!authenticated) ws.close(1008, 'Authentication required');
+    }, 5000);
+
+    ws.on('message', (raw) => {
+        let message;
+        try { message = JSON.parse(raw.toString()); }
+        catch (_) { ws.close(1007, 'Invalid JSON'); return; }
+
+        if (!authenticated) {
+            if (message.type !== 'authenticate' || !HOMELAB_AGENT_TOKEN ||
+                !safeEqualText(message.token || '', HOMELAB_AGENT_TOKEN)) {
+                ws.close(1008, 'Invalid agent credentials');
+                return;
+            }
+            authenticated = true;
+            clearTimeout(authTimer);
+            if (homelabAgentSocket && homelabAgentSocket !== ws) {
+                homelabAgentSocket.close(4001, 'Replaced by a newer Pi agent');
+            }
+            homelabAgentSocket = ws;
+            ws.send(JSON.stringify({ type: 'authenticated' }));
+            console.log('[homelab] Raspberry Pi agent authenticated');
+            return;
+        }
+
+        if (message.type !== 'telemetry' || message.device !== 'pi') return;
+        const now = new Date().toISOString();
+        const pi = message.pi && typeof message.pi === 'object' ? message.pi : {};
+        const pc = message.pc && typeof message.pc === 'object' ? message.pc : {};
+
+        for (const key of ['ssh_access', 'usb_gadget_setup', 'server2_connection', 'pi_kvm', 'pi_wousb']) {
+            if (typeof pi[key] === 'boolean') homelabState.pi[key] = pi[key];
+        }
+        homelabState.pi.online = true;
+        homelabState.pi.last_seen = now;
+
+        if (typeof pc.online === 'boolean') homelabState.pc.online = pc.online;
+        if (typeof pc.anydesk_connected === 'boolean') homelabState.pc.anydesk_connected = pc.anydesk_connected;
+        if (typeof pc.wifi_access === 'boolean') homelabState.pc.wifi_access = pc.wifi_access;
+        if (pc.battery_percent === null || (Number.isFinite(pc.battery_percent) &&
+            pc.battery_percent >= 0 && pc.battery_percent <= 100)) {
+            homelabState.pc.battery_percent = pc.battery_percent;
+        }
+        if (pc.last_seen) homelabState.pc.last_seen = now;
+        else if (pc.online) homelabState.pc.last_seen = now;
+        homelabState.updated_at = now;
+    });
+
+    ws.on('close', () => {
+        clearTimeout(authTimer);
+        if (homelabAgentSocket === ws) {
+            homelabAgentSocket = null;
+            homelabState.pi.online = false;
+            console.log('[homelab] Raspberry Pi agent disconnected');
+        }
+    });
+    ws.on('error', error => console.error('[homelab websocket]', error.message));
+});
+
+app.get('/homelab', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'homelab', 'homelab-dashboard.html'));
+});
+
 const scriptsDir = path.join(publicDir, 'scripts');
 const consolePage = path.join(publicDir, 'console', 'index.html');
 
