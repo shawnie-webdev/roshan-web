@@ -4,9 +4,28 @@ This directory contains the two agents used by the private Homelab dashboard in 
 
 ## Architecture
 
+**Roshan-Web on Render is the central server.** It is not Server 1 or Server 2, and it does not connect directly to either machine's USB hardware.
+
 - Server 2 runs `agents/pc_agent.py` and reports laptop telemetry over the PiAsA USB CDC-ACM serial function.
-- Server 1 runs `agents/pi_agent.py`. It reads the PC serial messages from `/dev/ttyGS0`, collects Raspberry Pi health, then sends both devices' telemetry to the website over an authenticated WebSocket.
-- The website exposes `/ws/homelab` for the Pi agent and a password-protected dashboard at `/homelab`.
+- Server 1 (the Raspberry Pi) runs `agents/pi_agent.py`. It reads Server 2's serial messages from `/dev/ttyGS0`, independently collects Raspberry Pi health, and forwards both devices' telemetry to the Render-hosted Roshan-Web service.
+- Render receives the Pi agent's authenticated WebSocket connection at `/ws/homelab`, keeps the latest telemetry, and serves the password-protected dashboard at `/homelab`.
+- The dashboard browser reads status from Render using `/api/homelab/status`. It never talks directly to the Pi or laptop.
+
+Data flow:
+
+```text
+Server 2 (PC agent)
+       |
+       | PiAsA USB CDC serial
+       v
+Server 1 (Pi agent) ---- authenticated WSS ----> Roshan-Web on Render
+                                                    |
+                                                    | HTTPS status API
+                                                    v
+                                              Browser dashboard
+```
+
+The Render service currently keeps the latest telemetry in process memory. Run this Render web service as **one instance**; scaling it horizontally would require shared storage (such as Render Key Value) so the WebSocket and dashboard requests see the same state.
 
 The serial link is separate from the HID interface in the PiAsA composite gadget. The Pi agent opens the CDC-ACM serial TTY only; it does not reconfigure configfs or take over the HID keyboard function. Keep the PiAsA gadget active and ensure the composite configuration contains both your HID function(s) and one serial function.
 
