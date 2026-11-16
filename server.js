@@ -13,6 +13,20 @@ const publicDir = path.join(__dirname, 'public');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '16kb' }));
 
+// Small cookie parser; no additional session dependency is needed.
+app.use((req, _res, next) => {
+    req.cookies = {};
+    const header = req.headers.cookie || '';
+    for (const part of header.split(';')) {
+        const index = part.indexOf('=');
+        if (index < 0) continue;
+        const key = part.slice(0, index).trim();
+        const value = part.slice(index + 1).trim();
+        try { req.cookies[key] = decodeURIComponent(value); } catch (_) {}
+    }
+    next();
+});
+
 // --------------------------------------------------
 // Homelab authentication and live telemetry
 // --------------------------------------------------
@@ -65,20 +79,6 @@ function requireHomelab(req, res, next) {
     }
     next();
 }
-
-// Small cookie parser; no additional session dependency is needed.
-app.use((req, _res, next) => {
-    req.cookies = {};
-    const header = req.headers.cookie || '';
-    for (const part of header.split(';')) {
-        const index = part.indexOf('=');
-        if (index < 0) continue;
-        const key = part.slice(0, index).trim();
-        const value = part.slice(index + 1).trim();
-        try { req.cookies[key] = decodeURIComponent(value); } catch (_) {}
-    }
-    next();
-});
 
 app.post('/api/homelab/login', (req, res) => {
     if (!HOMELAB_ACCESS_PASSWORD) {
