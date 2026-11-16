@@ -1,0 +1,7 @@
+{
+  "name": "Library of Babel",
+  "desc": "A small webpage that finds a pattern of text inside the library of babel",
+  "exec-type": "html",
+  "run-script": "google-chrome index.html",
+  "main": "index.html"
+}

@@ -3,36 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Projects and experiments by Roshaun.">
+    <meta name="description" content="Scripts and experiments by Roshaun.">
     <title>Roshaun's Website</title>
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <header class="top-bar">
+    <header class="top-bar" style="flex-direction: row">
         <nav class="nav-container" aria-label="Main navigation">
+            <strong style="align-self: center">Roshaun's Website</strong>
             <a class="nav-btn active buttonlike" href="/">Home</a>
-            <a class="nav-btn buttonlike" href="/stat">Status</a>
-            <a class="nav-btn buttonlike" href="/control">Controls</a>
+            <a class="nav-btn buttonlike" href="/list/scripts">Scripts</a>
+            <a class="nav-btn buttonlike" href="/list/projects">Projects</a>
         </nav>
     </header>
 
     <main class="main-container">
         <section class="card intro-card">
             <h1>Roshaun's Website</h1>
-            <p>Hi! Welcome to my website. Check out the projects and experiments I've made.</p>
-            <a class="scroll-link" href="#projects">Explore projects ↓</a>
+            <p>Hi! Welcome to my website. Check out the scripts and experiments I've made.</p>
+            <a class="scroll-link" href="#scripts">Explore scripts ↓</a>
         </section>
 
-        <section class="projects-section" id="projects" aria-labelledby="projects-heading">
+        <section class="scripts-section" id="scripts" aria-labelledby="scripts-heading">
             <div class="section-heading">
                 <div>
-                    <h2 id="projects-heading">Projects</h2>
+                    <h2 id="scripts-heading">Scripts</h2>
                     <p>Things I've built and experiments I've tried.</p>
                 </div>
-                <span id="project-count" class="project-count" aria-live="polite"></span>
+                <span id="script-count" class="script-count" aria-live="polite"></span>
             </div>
-            <div id="items" class="project-grid" aria-live="polite">
-                <p class="state-message">Loading projects…</p>
+            <div id="items" class="script-grid" aria-live="polite">
+                <p class="state-message">Loading scripts…</p>
             </div>
         </section>
     </main>
@@ -40,7 +41,7 @@
     <script>
     (() => {
         const container = document.getElementById('items');
-        const count = document.getElementById('project-count');
+        const count = document.getElementById('script-count');
 
         function showMessage(message, className = 'state-message') {
             container.replaceChildren();
@@ -50,54 +51,54 @@
             container.appendChild(paragraph);
         }
 
-        function makeProjectCard(project) {
+        function makeScriptCard(script) {
             const article = document.createElement('article');
-            article.className = 'card project-card';
+            article.className = 'card script-card';
 
             const type = document.createElement('span');
-            type.className = 'project-type';
-            type.textContent = project['exec-type'] === 'html' ? 'HTML project' : 'Console project';
+            type.className = 'script-type';
+            type.textContent = script['exec-type'] === 'html' ? 'HTML script' : 'Console script';
 
             const title = document.createElement('h3');
-            title.textContent = project.name || project.id;
+            title.textContent = script.name || script.id;
 
             const description = document.createElement('p');
-            description.textContent = project.desc || 'No description provided yet.';
+            description.textContent = script.desc || 'No description provided yet.';
 
             const link = document.createElement('a');
-            link.className = 'project-link';
-            const projectUrl = project['exec-type'] === 'console' ? '/console/' : '/project/';
-            link.href = projectUrl + encodeURIComponent(project.id);
-            link.textContent = project['exec-type'] === 'html' ? 'Open project →' : 'Open console →';
+            link.className = 'script-link';
+            const scriptUrl = script['exec-type'] === 'script' ? '/script/' : '/script/';
+            link.href = scriptUrl + encodeURIComponent(script.id);
+            link.textContent = script['exec-type'] === 'html' ? 'Open script →' : 'Open console →';
 
             article.append(type, title, description, link);
             return article;
         }
 
-        async function loadProjects() {
+        async function loadScripts() {
             try {
-                const response = await fetch('/api/projects', {
+                const response = await fetch('/api/scripts', {
                     headers: { 'Accept': 'application/json' }
                 });
-                if (!response.ok) throw new Error('The project API returned HTTP ' + response.status);
+                if (!response.ok) throw new Error('The script API returned HTTP ' + response.status);
 
-                const projects = await response.json();
-                if (!Array.isArray(projects)) throw new Error('The project API returned an invalid response');
+                const scripts = await response.json();
+                if (!Array.isArray(scripts)) throw new Error('The script API returned an invalid response');
 
-                count.textContent = projects.length + (projects.length === 1 ? ' project' : ' projects');
-                if (projects.length === 0) {
-                    showMessage('No projects have been published yet.');
+                count.textContent = scripts.length + (scripts.length === 1 ? ' script' : ' scripts');
+                if (scripts.length === 0) {
+                    showMessage('No scripts have been published yet.');
                     return;
                 }
 
-                container.replaceChildren(...projects.map(makeProjectCard));
+                container.replaceChildren(...scripts.map(makeScriptCard));
             } catch (error) {
-                console.error('Unable to load projects:', error);
-                showMessage('Projects could not be loaded. Please try again later.');
+                console.error('Unable to load scripts:', error);
+                showMessage('Scripts could not be loaded. Please try again later.');
             }
         }
 
-        loadProjects();
+        loadScripts();
     })();
     </script>
 </body>

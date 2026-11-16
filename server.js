@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 const publicDir = path.join(__dirname, 'public');
-const projectsDir = path.join(publicDir, 'projects');
+const scriptsDir = path.join(publicDir, 'scripts');
 const consolePage = path.join(publicDir, 'console', 'index.html');
 
 // These limits protect the Render web service from accidental runaway runs.
@@ -31,9 +31,9 @@ function escapeHtml(value) {
 function sendErrorPage(res, status, endpoint = res.req?.originalUrl || 'unknown') {
     const messages = {
         400: 'The request is invalid.',
-        404: 'The requested file or project was not found.',
-        409: 'This project cannot be loaded in the requested view.',
-        415: 'This project type is not supported by this endpoint.',
+        404: 'The requested file was not found.',
+        409: 'This object cannot be loaded in the requested view.',
+        415: 'This object type is not supported by this endpoint.',
         500: 'An internal server error occurred.'
     };
     const title = messages[status] || 'An error occurred.';
@@ -45,17 +45,17 @@ function sendErrorPage(res, status, endpoint = res.req?.originalUrl || 'unknown'
 <a href="/">Return home</a></body></html>`);
 }
 
-function safeProjectId(value) {
+function safeScriptId(value) {
     return typeof value === 'string' && /^[a-zA-Z0-9_-]+$/.test(value);
 }
 
-function getProject(projectId) {
-    if (!safeProjectId(projectId)) return null;
+function getScript(scriptId) {
+    if (!safeScriptId(scriptId)) return null;
 
-    const projectDir = path.resolve(projectsDir, projectId);
-    if (!projectDir.startsWith(projectsDir + path.sep)) return null;
+    const scriptDir = path.resolve(scriptsDir, scriptId);
+    if (!scriptDir.startsWith(scriptsDir + path.sep)) return null;
 
-    const metadataPath = path.join(projectDir, 'metadata.json');
+    const metadataPath = path.join(scriptDir, 'metadata.json');
     if (!fs.existsSync(metadataPath)) return null;
 
     try {
@@ -63,41 +63,41 @@ function getProject(projectId) {
         const main = typeof metadata.main === 'string' ? metadata.main : null;
         if (!main || path.isAbsolute(main) || main.split(/[\\/]/).includes('..')) return null;
 
-        const mainPath = path.resolve(projectDir, main);
-        if (!mainPath.startsWith(projectDir + path.sep) || !fs.existsSync(mainPath)) return null;
+        const mainPath = path.resolve(scriptDir, main);
+        if (!mainPath.startsWith(scriptDir + path.sep) || !fs.existsSync(mainPath)) return null;
 
         return {
-            id: projectId,
-            name: metadata.name || projectId,
+            id: scriptId,
+            name: metadata.name || scriptId,
             desc: metadata.desc || '',
             'exec-type': metadata['exec-type'] || 'console',
             'run-script': typeof metadata['run-script'] === 'string' ? metadata['run-script'].trim() : '',
             main,
-            projectDir,
+            scriptDir,
             mainPath
         };
     } catch (error) {
-        console.error(`[project]${projectId}: invalid metadata.json`, error.message);
+        console.error(`[script]${scriptId}: invalid metadata.json`, error.message);
         return null;
     }
 }
 
-function listProjects() {
-    if (!fs.existsSync(projectsDir)) return [];
+function listScripts() {
+    if (!fs.existsSync(scriptsDir)) return [];
 
-    return fs.readdirSync(projectsDir, { withFileTypes: true })
+    return fs.readdirSync(scriptsDir, { withFileTypes: true })
         .filter(entry => entry.isDirectory())
-        .map(entry => getProject(entry.name))
+        .map(entry => getScript(entry.name))
         .filter(Boolean)
         .map(({ id, name, desc, 'exec-type': execType, main }) => ({
             id, name, desc, 'exec-type': execType, main
         }));
 }
 
-function loadProject(req, res, next) {
-    const project = getProject(req.params.project);
-    if (!project) return sendErrorPage(res, 404, req.originalUrl);
-    req.project = project;
+function loadScript(req, res, next) {
+    const script = getScript(req.params.script);
+    if (!script) return sendErrorPage(res, 404, req.originalUrl);
+    req.script = script;
     next();
 }
 
@@ -131,41 +131,41 @@ function stopRun(run, reason = 'Stopped') {
     run.forceKillTimer.unref?.();
 }
 
-function startProjectRun(project, ws) {
-    if (!project['run-script']) {
-        sendSocket(ws, { type: 'error', message: 'This project has no run-script configured in metadata.json.' });
+function startScriptRun(script, ws) {
+    if (!script['run-script']) {
+        sendSocket(ws, { type: 'error', message: 'This script has no run-script configured in metadata.json.' });
         return;
     }
 
-    const existing = activeRuns.get(project.id);
+    const existing = activeRuns.get(script.id);
     if (existing && !existing.exited) {
-        sendSocket(ws, { type: 'error', message: 'This project is already running in another console session.' });
+        sendSocket(ws, { type: 'error', message: 'This script is already running in another console session.' });
         return;
     }
 
     if (activeRuns.size >= MAX_CONCURRENT_RUNS) {
-        sendSocket(ws, { type: 'error', message: 'The server is already running the maximum number of projects. Try again shortly.' });
+        sendSocket(ws, { type: 'error', message: 'The server is already running the maximum number of scripts. Try again shortly.' });
         return;
     }
 
     const now = Date.now();
-    const last = lastRunAt.get(project.id) || 0;
+    const last = lastRunAt.get(script.id) || 0;
     if (now - last < START_COOLDOWN_MS) {
-        sendSocket(ws, { type: 'error', message: 'Please wait a moment before starting this project again.' });
+        sendSocket(ws, { type: 'error', message: 'Please wait a moment before starting this script again.' });
         return;
     }
-    lastRunAt.set(project.id, now);
+    lastRunAt.set(script.id, now);
 
     let child;
     try {
-        // run-script is trusted project-owner configuration, never client input.
-        // The shell is started in the project directory so relative paths work.
+        // run-script is trusted script-owner configuration, never client input.
+        // The shell is started in the script directory so relative paths work.
         // Do not pass the website's secrets/environment variables into the child.
-        child = spawn('/bin/sh', ['-lc', project['run-script']], {
-            cwd: project.projectDir,
+        child = spawn('/bin/sh', ['-lc', script['run-script']], {
+            cwd: script.scriptDir,
             env: {
                 PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
-                HOME: project.projectDir,
+                HOME: script.scriptDir,
                 TMPDIR: '/tmp',
                 LANG: 'C.UTF-8'
             },
@@ -173,12 +173,12 @@ function startProjectRun(project, ws) {
             detached: process.platform !== 'win32'
         });
     } catch (error) {
-        sendSocket(ws, { type: 'error', message: 'Could not start project: ' + error.message });
+        sendSocket(ws, { type: 'error', message: 'Could not start script: ' + error.message });
         return;
     }
 
     const run = {
-        projectId: project.id,
+        scriptId: script.id,
         ws,
         child,
         outputBytes: 0,
@@ -188,7 +188,7 @@ function startProjectRun(project, ws) {
         runtimeTimer: null,
         forceKillTimer: null
     };
-    activeRuns.set(project.id, run);
+    activeRuns.set(script.id, run);
 
     const emitOutput = (type, chunk) => {
         if (run.exited || run.stopping) return;
@@ -215,15 +215,15 @@ function startProjectRun(project, ws) {
         run.exited = true;
         clearTimeout(run.runtimeTimer);
         clearTimeout(run.forceKillTimer);
-        if (activeRuns.get(project.id) === run) activeRuns.delete(project.id);
+        if (activeRuns.get(script.id) === run) activeRuns.delete(script.id);
         sendSocket(ws, { type: 'exit', code, signal });
     });
 
     sendSocket(ws, {
         type: 'started',
-        project: project.name,
-        command: project['run-script'],
-        cwd: path.relative(__dirname, project.projectDir)
+        script: script.name,
+        command: script['run-script'],
+        cwd: path.relative(__dirname, script.scriptDir)
     });
 }
 
@@ -235,17 +235,17 @@ const wss = new WebSocketServer({
 
 wss.on('connection', (ws, request) => {
     const requestUrl = new URL(request.url, 'http://localhost');
-    const project = getProject(requestUrl.searchParams.get('project') || '');
+    const script = getScript(requestUrl.searchParams.get('script') || '');
 
-    if (!project || project['exec-type'] !== 'console') {
-        ws.close(1008, 'A valid console project is required');
+    if (!script || script['exec-type'] !== 'console') {
+        ws.close(1008, 'A valid console script is required');
         return;
     }
 
     sendSocket(ws, {
         type: 'ready',
-        project: project.name,
-        hasRunScript: Boolean(project['run-script'])
+        script: script.name,
+        hasRunScript: Boolean(script['run-script'])
     });
 
     ws.on('message', (raw) => {
@@ -260,11 +260,11 @@ wss.on('connection', (ws, request) => {
         if (!message || typeof message.type !== 'string') return;
 
         if (message.type === 'start') {
-            startProjectRun(project, ws);
+            startScriptRun(script, ws);
             return;
         }
 
-        const run = activeRuns.get(project.id);
+        const run = activeRuns.get(script.id);
         if (!run || run.ws !== ws || run.exited) {
             sendSocket(ws, { type: 'error', message: 'There is no active process in this terminal.' });
             return;
@@ -293,7 +293,7 @@ wss.on('connection', (ws, request) => {
     });
 
     ws.on('close', () => {
-        const run = activeRuns.get(project.id);
+        const run = activeRuns.get(script.id);
         if (run && run.ws === ws) stopRun(run, 'Terminal disconnected');
     });
     ws.on('error', error => console.error('[console websocket]', error.message));
@@ -306,50 +306,50 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(publicDir, 'homepage', 'index.html'));
 });
 
-app.get(['/api/projects', '/api/project/info'], (req, res) => {
-    if (!req.query.project) return res.json(listProjects());
+app.get(['/api/scripts', '/api/script/info'], (req, res) => {
+    if (!req.query.script) return res.json(listScripts());
 
-    const project = getProject(String(req.query.project));
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const script = getScript(String(req.query.script));
+    if (!script) return res.status(404).json({ error: 'Script not found' });
 
-    const { id, name, desc, 'exec-type': execType, 'run-script': runScript, main } = project;
+    const { id, name, desc, 'exec-type': execType, 'run-script': runScript, main } = script;
     return res.json({ id, name, desc, 'exec-type': execType, 'run-script': runScript, main });
 });
 
 // Retained for source preview/inspection. Running is handled by the WebSocket terminal.
-app.get('/api/project/console', (req, res) => {
-    const project = getProject(String(req.query.project || ''));
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+app.get('/api/script/console', (req, res) => {
+    const script = getScript(String(req.query.script || ''));
+    if (!script) return res.status(404).json({ error: 'Script not found' });
     try {
         return res.json({
-            id: project.id,
-            name: project.name,
-            desc: project.desc,
-            main: project.main,
-            source: fs.readFileSync(project.mainPath, 'utf8')
+            id: script.id,
+            name: script.name,
+            desc: script.desc,
+            main: script.main,
+            source: fs.readFileSync(script.mainPath, 'utf8')
         });
     } catch (error) {
-        console.error('[console] Unable to read project source:', error);
-        return res.status(500).json({ error: 'Unable to load project source' });
+        console.error('[console] Unable to read script source:', error);
+        return res.status(500).json({ error: 'Unable to load script source' });
     }
 });
 
-function sendProjectPage(req, res) {
-    const project = req.project;
+function sendScriptPage(req, res) {
+    const script = req.script;
 
-    if (project['exec-type'] === 'html') {
-        return res.sendFile(project.mainPath, error => {
+    if (script['exec-type'] === 'html') {
+        return res.sendFile(script.mainPath, error => {
             if (error) {
-                console.error('[project] Unable to send HTML project:', error.message);
+                console.error('[script] Unable to send HTML script:', error.message);
                 if (!res.headersSent) sendErrorPage(res, error.statusCode === 404 ? 404 : 500, req.originalUrl);
             }
         });
     }
 
-    if (project['exec-type'] === 'console') {
+    if (script['exec-type'] === 'console') {
         return res.sendFile(consolePage, error => {
             if (error) {
-                console.error('[project] Unable to send console page:', error.message);
+                console.error('[script] Unable to send console page:', error.message);
                 if (!res.headersSent) sendErrorPage(res, 500, req.originalUrl);
             }
         });
@@ -358,19 +358,11 @@ function sendProjectPage(req, res) {
     return sendErrorPage(res, 415, req.originalUrl);
 }
 
-// The homepage's project links land here. Choose the correct page from metadata.
-app.get('/project/:project', loadProject, sendProjectPage);
+// The homepage's script links land here. Choose the correct page from metadata.
+app.get('/script/:script', loadScript, sendScriptPage);
 
-// Keep the explicit console URL as an alias for console projects.
-app.get('/console/:project', loadProject, (req, res) => {
-    if (req.project['exec-type'] !== 'console') {
-        return sendErrorPage(res, 415, req.originalUrl);
-    }
-    return sendProjectPage(req, res);
-});
-
-// Source viewer is separate from the runnable terminal and HTML project page.
-app.get('/view/:project', loadProject, (req, res) => {
+// Source viewer is separate from the runnable terminal and HTML script page.
+app.get('/view/:script', loadScript, (req, res) => {
     return res.sendFile(path.join(publicDir, 'console', 'view.html'), error => {
         if (error) {
             console.error('[view] Unable to send source viewer:', error.message);

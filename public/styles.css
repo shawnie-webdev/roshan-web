@@ -23,6 +23,10 @@ body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+.width80 {
+    width: 80%;
+}
+
 .top-bar {
     width: 100%;
     padding: 1rem 2rem;
@@ -31,6 +35,7 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
+/* top bar formatting */
 .nav-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -58,9 +63,19 @@ button:hover, .nav-btn:hover {
     color: var(--text-main);
 }
 
+/* naviagtion (top bar) stuff */
+
 .nav-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 .nav-btn.active:hover { background: var(--primary-hover); }
-.buttonlike { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+/* buttonlike is for <a> to look like button */
+.buttonlike {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    text-decoration: none;
+}
 
 .main-container {
     width: min(1120px, 100%);
@@ -83,18 +98,53 @@ button:hover, .nav-btn:hover {
 .intro-card { text-align: center; padding: 3rem 2rem; }
 h1 { margin-bottom: 0.75rem; font-size: clamp(1.7rem, 4vw, 2.25rem); letter-spacing: -0.03em; }
 p { color: var(--text-muted); font-size: 1rem; line-height: 1.6; }
-.scroll-link { display: inline-block; margin-top: 1.25rem; color: var(--primary); font-weight: 650; text-decoration: none; }
-.scroll-link:hover, .project-link:hover { text-decoration: underline; }
 
-.projects-section { width: 100%; }
-.section-heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin-bottom: 1rem; }
-.section-heading h2 { margin-bottom: 0.35rem; font-size: 1.5rem; }
-.project-count, .project-type { color: var(--primary); font-size: 0.8rem; font-weight: 700; }
-.project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
-.project-card { display: flex; flex-direction: column; align-items: flex-start; gap: 0.8rem; padding: 1.5rem; text-align: left; }
-.project-card h3 { font-size: 1.2rem; }
-.project-link { margin-top: auto; color: var(--primary); font-weight: 700; text-decoration: none; }
+/* script section formatting */
+.scroll-link {
+    display: inline-block;
+    margin-top: 1.25rem;
+    color: var(--primary);
+    font-weight: 650;
+    text-decoration: none;
+
+}
+.scroll-link:hover, .script-link:hover {
+    text-decoration: underline;
+}
+
+.scripts-section { width: 100%; }
+
+.section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+
+    gap: 1rem;
+    margin-bottom: 1rem;
+
+}
+.section-heading h2 {
+    margin-bottom: 0.35rem;
+    font-size: 1.5rem;
+}
+
+.script-count, .script-type {
+    color: var(--primary);
+
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+.script-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+.script-card { display: flex; flex-direction: column; align-items: flex-start; gap: 0.8rem; padding: 1.5rem; text-align: left; }
+.script-card h3 { font-size: 1.2rem; }
+.script-link { margin-top: auto; color: var(--primary); font-weight: 700; text-decoration: none; }
 .state-message { grid-column: 1 / -1; padding: 1.5rem; text-align: center; }
+
+/* console formatting */
 
 .console-container { width: min(1000px, 100%); padding: 2.5rem 1.5rem; }
 .console-card { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; }
